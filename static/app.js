@@ -1,7 +1,12 @@
 const state = {
   roots: [], definitions: [], definitionMap: new Map(), rules: [], items: [],
   presets: {}, history: [], browse: null, job: null, pollTimer: null, previewTimer: null,
+  previewController: null, previewRevision: 0, previewDirty: false, renderFrame: null,
 };
+
+const PREVIEW_ROW_HEIGHT = 55;
+const PREVIEW_OVERSCAN = 12;
+const AUTO_PREVIEW_LIMIT = 1500;
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -167,11 +172,16 @@ function scanOptions() {
 async function scan() {
   const button = $("#scanButton"); setBusy(button, true, "扫描中…");
   try {
+    state.previewController?.abort();
     const data = await api("/api/scan", {method: "POST", body: JSON.stringify(scanOptions())});
-    state.items = data.items;
+    state.items = data.items.map(item => ({...item, status: "无变化"}));
+    state.previewDirty = state.rules.some(rule => rule.enabled !== false);
+    $(".table-wrap").scrollTop = 0;
     $("#metricPath").textContent = $("#pathInput").value;
     toast(`已载入 ${data.count} 个对象`);
-    await refreshPreview(false);
+    renderPreview();
+    updateMetrics();
+    if (state.rules.some(rule => rule.enabled !== false)) refreshPreview(true);
     document.querySelector("#review").scrollIntoView({behavior: "smooth", block: "start"});
   } catch (error) { toast(error.message, "error"); }
   finally { setBusy(button, false); updateMetrics(); }
@@ -180,48 +190,131 @@ async function scan() {
 function schedulePreview() {
   clearTimeout(state.previewTimer);
   if (!state.items.length) return;
-  state.previewTimer = setTimeout(() => refreshPreview(true), 500);
+  state.previewDirty = true;
+  updateMetrics();
+  if (state.items.length > AUTO_PREVIEW_LIMIT) {
+    state.previewController?.abort();
+    updatePreviewHint();
+    return;
+  }
+  state.previewTimer = setTimeout(() => refreshPreview(true), 700);
 }
 
 async function refreshPreview(silent = false) {
   if (!state.items.length) { if (!silent) toast("请先扫描文件", "warn"); return; }
-  const previous = new Map(state.items.map(item => [item.path, item.checked !== false]));
-  try {
-    const data = await api("/api/preview", {method: "POST", body: JSON.stringify({paths: state.items.map(item => item.path), rules: state.rules})});
-    state.items = data.items.map(item => ({...item, checked: previous.get(item.path) ?? true}));
+  if (!state.rules.some(rule => rule.enabled !== false)) {
+    state.previewController?.abort();
+    state.items = state.items.map(item => ({
+      ...item, new_name: item.old_name, status: "无变化", conflict: false, error: undefined,
+    }));
+    state.previewDirty = false;
     renderPreview(); updateMetrics();
-    $("#previewHint").textContent = `${state.items.length} 项 · ${state.rules.length} 条规则`;
-  } catch (error) { if (!silent) toast(error.message, "error"); }
+    return;
+  }
+  state.previewController?.abort();
+  const controller = new AbortController();
+  const revision = ++state.previewRevision;
+  state.previewController = controller;
+  const previous = new Map(state.items.map(item => [item.path, item.checked !== false]));
+  $("#previewHint").textContent = `正在生成 ${state.items.length} 项预览…`;
+  try {
+    const data = await api("/api/preview", {
+      method: "POST",
+      signal: controller.signal,
+      body: JSON.stringify({paths: state.items.map(item => item.path), rules: state.rules}),
+    });
+    if (revision !== state.previewRevision) return;
+    state.items = data.items.map(item => ({...item, checked: previous.get(item.path) ?? true}));
+    state.previewDirty = false;
+    renderPreview(); updateMetrics();
+  } catch (error) {
+    if (error.name !== "AbortError" && !silent) toast(error.message, "error");
+  } finally {
+    if (revision === state.previewRevision) {
+      state.previewController = null;
+      updatePreviewHint();
+    }
+  }
+}
+
+function previewWindow() {
+  const wrap = $(".table-wrap");
+  const visibleRows = Math.ceil((wrap.clientHeight || 590) / PREVIEW_ROW_HEIGHT);
+  const start = Math.max(0, Math.floor(wrap.scrollTop / PREVIEW_ROW_HEIGHT) - PREVIEW_OVERSCAN);
+  const end = Math.min(state.items.length, start + visibleRows + PREVIEW_OVERSCAN * 2);
+  return {start, end};
+}
+
+function updatePreviewHint(windowRange = previewWindow()) {
+  if (!state.items.length) {
+    $("#previewHint").textContent = "请先扫描文件";
+    return;
+  }
+  if (state.previewController) {
+    $("#previewHint").textContent = `正在生成 ${state.items.length} 项预览…`;
+    return;
+  }
+  if (state.previewDirty) {
+    $("#previewHint").textContent = `${state.items.length} 项 · 规则已更改，请点击刷新预览`;
+    return;
+  }
+  const first = windowRange.start + 1;
+  $("#previewHint").textContent = `${state.items.length} 项 · 显示 ${first}–${windowRange.end} · ${state.rules.length} 条规则`;
+}
+
+function previewRow(item, index) {
+  let statusClass = item.conflict || item.error ? "conflict" : "";
+  if (item.duplicate_of) statusClass = "duplicate";
+  const status = item.duplicate_of ? "内容重复" : (item.error || item.status);
+  return `<tr class="preview-row" data-index="${index}">
+    <td><label class="check"><input type="checkbox" data-check="${index}" ${item.checked !== false ? "checked" : ""}><span></span></label></td>
+    <td><span class="file-name" title="${escapeHtml(item.old_name)}">${escapeHtml(item.old_name)}</span></td>
+    <td class="arrow-cell">→</td>
+    <td><input class="new-name" data-name="${index}" value="${escapeHtml(item.new_name || "")}" ${item.error ? "disabled" : ""}></td>
+    <td class="path-cell" title="${escapeHtml(item.path)}">${escapeHtml(item.path.substring(0, item.path.length - item.old_name.length))}</td>
+    <td><span class="status-pill ${statusClass}" title="${escapeHtml(status)}">${escapeHtml(status)}</span></td>
+  </tr>`;
 }
 
 function renderPreview() {
   const body = $("#previewBody");
-  if (!state.items.length) { body.innerHTML = `<tr><td colspan="6" class="table-empty">扫描结果会显示在这里</td></tr>`; return; }
-  body.innerHTML = state.items.map((item, index) => {
-    let statusClass = item.conflict || item.error ? "conflict" : "";
-    if (item.duplicate_of) statusClass = "duplicate";
-    const status = item.duplicate_of ? "内容重复" : (item.error || item.status);
-    return `<tr data-index="${index}">
-      <td><label class="check"><input type="checkbox" data-check="${index}" ${item.checked !== false ? "checked" : ""}><span></span></label></td>
-      <td><span class="file-name" title="${escapeHtml(item.old_name)}">${escapeHtml(item.old_name)}</span></td>
-      <td class="arrow-cell">→</td>
-      <td><input class="new-name" data-name="${index}" value="${escapeHtml(item.new_name || "")}" ${item.error ? "disabled" : ""}></td>
-      <td class="path-cell" title="${escapeHtml(item.path)}">${escapeHtml(item.path.substring(0, item.path.length - item.old_name.length))}</td>
-      <td><span class="status-pill ${statusClass}" title="${escapeHtml(status)}">${escapeHtml(status)}</span></td>
-    </tr>`;
-  }).join("");
-  $$('[data-check]', body).forEach(box => box.addEventListener("change", () => { state.items[Number(box.dataset.check)].checked = box.checked; updateMetrics(); }));
-  $$('[data-name]', body).forEach(input => input.addEventListener("input", () => { const item = state.items[Number(input.dataset.name)]; item.new_name = input.value; item.status = input.value === item.old_name ? "无变化" : "手动修改"; updateMetrics(); }));
+  if (!state.items.length) {
+    body.innerHTML = `<tr><td colspan="6" class="table-empty">扫描结果会显示在这里</td></tr>`;
+    updatePreviewHint();
+    return;
+  }
+  const range = previewWindow();
+  const top = range.start * PREVIEW_ROW_HEIGHT;
+  const bottom = (state.items.length - range.end) * PREVIEW_ROW_HEIGHT;
+  const rows = state.items.slice(range.start, range.end).map((item, offset) => previewRow(item, range.start + offset)).join("");
+  body.innerHTML = `${top ? `<tr class="virtual-spacer" aria-hidden="true"><td colspan="6" style="height:${top}px"></td></tr>` : ""}${rows}${bottom ? `<tr class="virtual-spacer" aria-hidden="true"><td colspan="6" style="height:${bottom}px"></td></tr>` : ""}`;
+  updatePreviewHint(range);
+}
+
+function schedulePreviewRender() {
+  if (state.renderFrame) return;
+  state.renderFrame = requestAnimationFrame(() => {
+    state.renderFrame = null;
+    renderPreview();
+  });
 }
 
 function updateMetrics() {
-  const selected = state.items.filter(item => item.checked !== false);
-  const changed = selected.filter(item => item.new_name && item.new_name !== item.old_name);
-  const conflicts = selected.filter(item => item.conflict || item.error);
+  let selected = 0;
+  let changed = 0;
+  let conflicts = 0;
+  for (const item of state.items) {
+    if (item.checked === false) continue;
+    selected += 1;
+    if (item.new_name && item.new_name !== item.old_name) changed += 1;
+    if (item.conflict || item.error) conflicts += 1;
+  }
   $("#metricLoaded").textContent = state.items.length;
-  $("#metricChanged").textContent = changed.length;
-  $("#metricConflicts").textContent = conflicts.length;
-  $("#executeButton").disabled = changed.length === 0 || Boolean(state.job && ["queued", "running", "paused"].includes(state.job.state));
+  $("#metricChanged").textContent = changed;
+  $("#metricConflicts").textContent = conflicts;
+  $("#selectAll").checked = Boolean(state.items.length) && selected === state.items.length;
+  $("#selectAll").indeterminate = selected > 0 && selected < state.items.length;
+  $("#executeButton").disabled = state.previewDirty || changed === 0 || Boolean(state.job && ["queued", "running", "paused"].includes(state.job.state));
 }
 
 async function browse(path) {
@@ -334,6 +427,21 @@ function bindEvents() {
   $("#selectAll").addEventListener("change", event => { state.items.forEach(item => item.checked = event.target.checked); renderPreview(); updateMetrics(); });
   $("#invertSelection").addEventListener("click", () => { state.items.forEach(item => item.checked = item.checked === false); renderPreview(); updateMetrics(); });
   $("#selectDuplicates").addEventListener("click", () => { state.items.forEach(item => item.checked = Boolean(item.duplicate_of)); renderPreview(); updateMetrics(); });
+  $(".table-wrap").addEventListener("scroll", schedulePreviewRender, {passive: true});
+  $("#previewBody").addEventListener("change", event => {
+    const box = event.target.closest("[data-check]");
+    if (!box) return;
+    state.items[Number(box.dataset.check)].checked = box.checked;
+    updateMetrics();
+  });
+  $("#previewBody").addEventListener("input", event => {
+    const input = event.target.closest("[data-name]");
+    if (!input) return;
+    const item = state.items[Number(input.dataset.name)];
+    item.new_name = input.value;
+    item.status = input.value === item.old_name ? "无变化" : "手动修改";
+    updateMetrics();
+  });
   $("#browseButton").addEventListener("click", async () => { $("#browserDialog").showModal(); await browse($("#pathInput").value); });
   $("#browserUp").addEventListener("click", () => state.browse?.parent && browse(state.browse.parent));
   $("#chooseDirectory").addEventListener("click", () => { $("#pathInput").value = state.browse.path; $("#browserDialog").close(); });
