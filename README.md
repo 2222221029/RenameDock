@@ -28,10 +28,11 @@
 4. 启动服务：
 
    ```bash
-   docker compose up -d --build
+   docker compose pull
+   docker compose up -d
    ```
 
-5. 浏览器访问 `http://NAS的IP:2049`。
+5. 浏览器访问 `http://NAS的IP:2080`。
 
 飞牛 Docker 管理界面也可以直接导入此 Compose 文件。如果界面能浏览文件但执行时报权限不足，请检查飞牛共享目录是否允许容器写入。
 
@@ -47,15 +48,15 @@
 ### 使用 Docker 命令
 
 ```bash
-docker build -t renamedock:latest .
+docker pull ghcr.io/2222221029/renamedock:latest
 docker run -d --name renamedock --restart unless-stopped \
-  -p 2049:8080 \
+  -p 2080:8080 \
   -e TZ=Asia/Shanghai \
   -e NAS_ROOTS=/data \
   -e RENAMEDOCK_TOKEN=请替换为强令牌 \
   -v /vol1:/data \
   -v /vol1/docker/renamedock/config:/config \
-  renamedock:latest
+  ghcr.io/2222221029/renamedock:latest
 ```
 
 镜像基于官方 Python slim，支持 Docker 可用的 x86_64 与 ARM64 飞牛设备。服务端使用单 Gunicorn 进程和多线程；单进程可确保后台任务状态在轮询时保持一致。
