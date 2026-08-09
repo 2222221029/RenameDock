@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>RenameDock · NAS File Renamer</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body data-token-required="{{ 'true' if token_required else 'false' }}">
+  <div class="ambient ambient-a"></div><div class="ambient ambient-b"></div>
+  <div id="toastStack" class="toast-stack" aria-live="polite"></div>
+
+  <aside class="rail">
+    <a class="brand" href="#top" aria-label="RenameDock 首页">
+      <span class="brand-mark"><i></i><i></i><i></i></span>
+      <span><b>RenameDock</b><small>NAS FILE RENAMER</small></span>
+    </a>
+    <nav>
+      <button class="nav-item active" data-jump="source"><span>01</span><i>选择文件</i></button>
+      <button class="nav-item" data-jump="rules"><span>02</span><i>编排规则</i></button>
+      <button class="nav-item" data-jump="review"><span>03</span><i>核对执行</i></button>
+    </nav>
+    <div class="rail-bottom">
+      <button class="icon-button" id="openHistory" title="历史与撤销">↶</button>
+      <button class="icon-button" id="openToken" title="访问令牌">⌁</button>
+      <span class="health"><i></i> Docker ready</span>
+    </div>
+  </aside>
+
+  <main id="top">
+    <header class="app-header">
+      <div>
+        <p class="breadcrumb">NAS 文件管理 / 批量重命名</p>
+        <h1>Batch Rename</h1>
+        <p class="header-help">选择目录 → 设置规则 → 预览结果 → 确认执行</p>
+      </div>
+      <div class="header-status">
+        <span><i></i><b id="rootCount">0 个挂载目录</b></span>
+        <small id="clock">--:--</small>
+      </div>
+    </header>
+
+    <section class="workspace-section" id="source">
+      <div class="section-heading">
+        <div><span class="section-number">01</span><h2>选择文件</h2></div>
+        <p>选择 NAS 目录并设置扫描范围。</p>
+      </div>
+      <div class="source-card glass-card">
+        <div class="path-bar">
+          <select id="rootSelect" aria-label="NAS 挂载点"></select>
+          <input id="pathInput" autocomplete="off" aria-label="扫描路径" placeholder="/data">
+          <button class="button secondary" id="browseButton">浏览目录</button>
+          <button class="button primary" id="scanButton"><span>扫描文件</span><b>↗</b></button>
+        </div>
+        <div class="scan-toggles">
+          <label class="toggle"><input type="checkbox" id="recursive"><span></span>递归子目录</label>
+          <label class="toggle"><input type="checkbox" id="includeDirs"><span></span>包含文件夹</label>
+          <label class="toggle"><input type="checkbox" id="includeHidden"><span></span>包含隐藏项</label>
+          <button class="text-button" id="toggleFilters">高级筛选 <b>＋</b></button>
+        </div>
+        <div class="filter-grid collapsed" id="filterGrid">
+          <label>扩展名 <input id="extensions" placeholder="jpg, mp4, pdf"></label>
+          <label>名称正则 <input id="nameRegex" placeholder="^IMG_.*"></label>
+          <label>最小体积（字节） <input id="minSize" type="number" min="0" placeholder="0"></label>
+          <label>最大体积（字节） <input id="maxSize" type="number" min="0" placeholder="不限"></label>
+          <label>修改时间晚于 <input id="after" type="datetime-local"></label>
+          <label>修改时间早于 <input id="before" type="datetime-local"></label>
+          <label>排序 <select id="sort"><option value="name">自然名称</option><option value="modified">修改时间</option><option value="size">文件大小</option></select></label>
+          <label class="toggle inline"><input type="checkbox" id="deduplicate"><span></span>标记内容重复文件</label>
+        </div>
+      </div>
+      <div class="metric-row">
+        <article><span>已载入</span><strong id="metricLoaded">0</strong><small>个对象</small></article>
+        <article><span>将变更</span><strong id="metricChanged">0</strong><small>个名称</small></article>
+        <article><span>冲突</span><strong id="metricConflicts">0</strong><small>项需处理</small></article>
+        <article class="wide"><span>当前目录</span><strong id="metricPath">尚未扫描</strong></article>
+      </div>
+    </section>
+
+    <section class="workspace-section" id="rules">
+      <div class="section-heading">
+        <div><span class="section-number">02</span><h2>设置重命名规则</h2></div>
+        <p>规则按顺序执行，可调整顺序并保存常用方案。</p>
+      </div>
+      <div class="rule-layout">
+        <aside class="rule-catalog glass-card">
+          <div class="mini-heading"><span>规则库</span><small id="ruleTypeCount">0 TYPES</small></div>
+          <input id="ruleSearch" class="search" placeholder="搜索规则…">
+          <div id="ruleTypes" class="rule-types"></div>
+          <div class="template-help">
+            <b>变量模板</b>
+            <p>{name} {n:03d} {date} {modified} {size} {sha256} {uuid}</p>
+            <p>图片、音频和 PDF 还支持 title、artist、album、taken 等元数据。</p>
+          </div>
+        </aside>
+        <div class="rule-canvas glass-card">
+          <div class="canvas-toolbar">
+            <div><span>规则流水线</span><small id="ruleCount">0 条规则</small></div>
+            <div class="preset-actions">
+              <select id="presetSelect"><option value="">选择已保存方案</option></select>
+              <button class="icon-button" id="savePreset" title="保存当前方案">⌘</button>
+              <button class="icon-button danger" id="deletePreset" title="删除所选方案">×</button>
+            </div>
+          </div>
+          <div id="ruleList" class="rule-list empty-state">
+            <div class="empty-illustration"><i></i><i></i><i></i></div>
+            <h3>从左侧添加第一条规则</h3>
+            <p>推荐先做清理，再进行重排与序号处理。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="workspace-section" id="review">
+      <div class="section-heading">
+        <div><span class="section-number">03</span><h2>预览并执行</h2></div>
+        <p>检查新名称、处理冲突，然后执行或撤销。</p>
+      </div>
+      <div class="preview-card glass-card">
+        <div class="preview-toolbar">
+          <div class="selection-tools">
+            <label class="check"><input type="checkbox" id="selectAll" checked><span></span></label>
+            <button class="text-button" id="invertSelection">反选</button>
+            <button class="text-button" id="selectDuplicates">仅选重复项</button>
+          </div>
+          <div class="preview-actions">
+            <span id="previewHint">请先扫描文件</span>
+            <button class="button secondary" id="previewButton">刷新预览</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th></th><th>原名称</th><th></th><th>新名称（可手动修改）</th><th>位置</th><th>状态</th></tr></thead>
+            <tbody id="previewBody"><tr><td colspan="6" class="table-empty">扫描结果会显示在这里</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div class="command-dock">
+    <div class="dock-status"><i id="jobDot"></i><div><span id="jobState">等待操作</span><small id="jobDetail">预览不会修改任何文件</small></div></div>
+    <div class="progress-track"><i id="progressBar"></i></div>
+    <select id="conflictMode" title="冲突策略">
+      <option value="error">冲突时停止</option><option value="skip">跳过冲突</option><option value="auto">自动追加序号</option><option value="overwrite">覆盖现有目标</option>
+    </select>
+    <button class="button secondary compact hidden" id="pauseJob">暂停</button>
+    <button class="button secondary compact hidden" id="cancelJob">取消</button>
+    <button class="button execute" id="executeButton"><span>确认并执行</span><b>→</b></button>
+  </div>
+
+  <dialog id="browserDialog" class="modal">
+    <div class="modal-head"><div><small>NAS DIRECTORY</small><h3>选择扫描目录</h3></div><button class="close" data-close="browserDialog">×</button></div>
+    <div class="browser-path"><button id="browserUp">←</button><code id="browserCurrent">/data</code></div>
+    <div id="browserEntries" class="browser-entries"></div>
+    <div class="modal-actions"><button class="button secondary" data-close="browserDialog">取消</button><button class="button primary" id="chooseDirectory">选择此目录</button></div>
+  </dialog>
+
+  <dialog id="historyDialog" class="modal side-modal">
+    <div class="modal-head"><div><small>RECOVERY LOG</small><h3>操作历史</h3></div><button class="close" data-close="historyDialog">×</button></div>
+    <div id="historyList" class="history-list"></div>
+  </dialog>
+
+  <dialog id="tokenDialog" class="modal token-modal">
+    <div class="modal-head"><div><small>ACCESS CONTROL</small><h3>连接访问令牌</h3></div><button class="close" data-close="tokenDialog">×</button></div>
+    <p>若 Docker 配置了 <code>NAS_RENAMER_TOKEN</code>，请在此输入。令牌只保存在当前浏览器。</p>
+    <input id="tokenInput" type="password" placeholder="NAS_RENAMER_TOKEN">
+    <div class="modal-actions"><button class="button primary" id="saveToken">保存并连接</button></div>
+  </dialog>
+
+  <script src="/static/app.js" defer></script>
+</body>
+</html>
+
