@@ -31,7 +31,7 @@
    docker compose up -d --build
    ```
 
-5. 浏览器访问 `http://NAS的IP:8080`。
+5. 浏览器访问 `http://NAS的IP:2049`。
 
 飞牛 Docker 管理界面也可以直接导入此 Compose 文件。如果界面能浏览文件但执行时报权限不足，请检查飞牛共享目录是否允许容器写入。
 
@@ -49,7 +49,7 @@
 ```bash
 docker build -t renamedock:latest .
 docker run -d --name renamedock --restart unless-stopped \
-  -p 8080:8080 \
+  -p 2049:8080 \
   -e TZ=Asia/Shanghai \
   -e NAS_ROOTS=/data \
   -e RENAMEDOCK_TOKEN=请替换为强令牌 \
