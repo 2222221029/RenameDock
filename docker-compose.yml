@@ -1,0 +1,23 @@
+name: renamedock
+
+services:
+  renamedock:
+    build: .
+    image: renamedock:latest
+    container_name: renamedock
+    restart: unless-stopped
+
+    ports:
+      - "8080:8080"
+
+    environment:
+      TZ: Asia/Shanghai
+      NAS_ROOTS: /data
+      CONFIG_DIR: /config
+      # RENAMEDOCK_TOKEN: change-this-token
+
+    volumes:
+      # 将 /vol1 改成需要管理的飞牛 NAS 目录
+      - /vol1:/data
+      - ./config:/config
+
