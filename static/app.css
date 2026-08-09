@@ -150,6 +150,8 @@ th { position: sticky; top: 0; z-index: 1; background: #101b1f; color: #667570; 
 th:first-child, td:first-child { width: 42px; text-align: center; }
 td { border-top: 1px solid rgba(201,230,220,.07); padding: 10px; font-size: 11px; }
 tbody tr:hover { background: rgba(255,255,255,.025); }
+.preview-row { height: 55px; }
+.virtual-spacer td { padding: 0; border: 0; height: 0; }
 .file-name { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
 .new-name { width: 100%; min-height: 34px; background: transparent; border-color: transparent; padding-left: 7px; }
 .new-name:focus { background: rgba(3,9,12,.5); }
