@@ -1,0 +1,6 @@
+Flask>=3.1,<4
+gunicorn>=23,<24
+Pillow>=10,<13
+mutagen>=1.47,<2
+pypdf>=4,<7
+
