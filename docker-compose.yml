@@ -2,13 +2,12 @@ name: renamedock
 
 services:
   renamedock:
-    build: .
-    image: renamedock:latest
+    image: ghcr.io/2222221029/renamedock:latest
     container_name: renamedock
     restart: unless-stopped
 
     ports:
-      - "2049:8080"
+      - "2080:8080"
 
     environment:
       TZ: Asia/Shanghai
