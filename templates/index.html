@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="dark">
+  <meta name="color-scheme" content="dark light">
   <title>RenameDock · NAS File Renamer</title>
   <link rel="stylesheet" href="/static/app.css">
 </head>
@@ -35,9 +35,14 @@
         <h1>Batch Rename</h1>
         <p class="header-help">选择目录 → 设置规则 → 预览结果 → 确认执行</p>
       </div>
-      <div class="header-status">
-        <span><i></i><b id="rootCount">0 个挂载目录</b></span>
-        <small id="clock">--:--</small>
+      <div class="header-actions">
+        <div class="header-status">
+          <span><i></i><b id="rootCount">0 个挂载目录</b></span>
+          <small id="clock">--:--</small>
+        </div>
+        <button class="theme-toggle" id="themeToggle" type="button" aria-label="切换浅色模式" title="切换浅色模式">
+          <span id="themeIcon" aria-hidden="true">☀</span>
+        </button>
       </div>
     </header>
 
@@ -167,6 +172,27 @@
     <p>若 Docker 配置了 <code>NAS_RENAMER_TOKEN</code>，请在此输入。令牌只保存在当前浏览器。</p>
     <input id="tokenInput" type="password" placeholder="NAS_RENAMER_TOKEN">
     <div class="modal-actions"><button class="button primary" id="saveToken">保存并连接</button></div>
+  </dialog>
+
+  <dialog id="actionDialog" class="modal action-modal" aria-labelledby="actionTitle">
+    <div class="modal-head">
+      <div><small id="actionEyebrow">CONFIRM ACTION</small><h3 id="actionTitle">确认操作</h3></div>
+      <button class="close" id="actionClose" type="button" aria-label="关闭">×</button>
+    </div>
+    <div class="action-dialog-body">
+      <span class="action-dialog-icon" id="actionIcon" aria-hidden="true">?</span>
+      <div>
+        <p id="actionMessage"></p>
+        <label class="action-input hidden" id="actionInputWrap">
+          <span id="actionInputLabel">名称</span>
+          <input id="actionInput" autocomplete="off">
+        </label>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="button secondary" id="actionCancel" type="button">取消</button>
+      <button class="button primary" id="actionConfirm" type="button">确认</button>
+    </div>
   </dialog>
 
   <script src="/static/app.js" defer></script>

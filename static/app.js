@@ -12,6 +12,141 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 const escapeHtml = (value) => String(value ?? "").replace(/[&<>'"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c]));
 const token = () => localStorage.getItem("renamedock-token") || "";
+let openSelectShell = null;
+let actionResolver = null;
+let actionMode = "confirm";
+
+function applyTheme(theme) {
+  const selected = theme === "light" ? "light" : "dark";
+  document.documentElement.dataset.theme = selected;
+  localStorage.setItem("renamedock-theme", selected);
+  const light = selected === "light";
+  $("#themeIcon").textContent = light ? "☾" : "☀";
+  $("#themeToggle").title = light ? "切换深色模式" : "切换浅色模式";
+  $("#themeToggle").setAttribute("aria-label", light ? "切换深色模式" : "切换浅色模式");
+}
+
+function initTheme() {
+  const saved = localStorage.getItem("renamedock-theme");
+  const preferred = window.matchMedia?.("(prefers-color-scheme: light)").matches ? "light" : "dark";
+  applyTheme(saved || preferred);
+}
+
+function closeCustomSelect() {
+  if (!openSelectShell) return;
+  openSelectShell.classList.remove("open");
+  openSelectShell.querySelector(".select-trigger")?.setAttribute("aria-expanded", "false");
+  openSelectShell = null;
+}
+
+function syncCustomSelect(select) {
+  const shell = select.closest(".custom-select");
+  if (!shell) return;
+  const trigger = shell.querySelector(".select-trigger");
+  const label = shell.querySelector(".select-value");
+  const menu = shell.querySelector(".select-menu");
+  const selected = select.options[select.selectedIndex] || select.options[0];
+  label.textContent = selected?.textContent || "请选择";
+  trigger.disabled = select.disabled;
+  menu.innerHTML = [...select.options].map((option, index) => (
+    `<button type="button" role="option" data-option="${index}" aria-selected="${option.selected}" ${option.disabled ? "disabled" : ""}>` +
+      `<span>${escapeHtml(option.textContent)}</span>${option.selected ? "<i>✓</i>" : ""}</button>`
+  )).join("");
+  $$('[data-option]', menu).forEach(button => button.addEventListener("click", event => {
+    event.preventDefault(); event.stopPropagation();
+    const option = select.options[Number(button.dataset.option)];
+    if (!option || option.disabled) return;
+    select.value = option.value;
+    select.dispatchEvent(new Event("change", {bubbles: true}));
+    syncCustomSelect(select);
+    closeCustomSelect();
+    trigger.focus();
+  }));
+}
+
+function enhanceSelect(select) {
+  if (select.closest(".custom-select")) { syncCustomSelect(select); return; }
+  const shell = document.createElement("div");
+  shell.className = "custom-select";
+  select.parentNode.insertBefore(shell, select);
+  shell.append(select);
+  select.classList.add("native-select");
+  const trigger = document.createElement("button");
+  trigger.type = "button";
+  trigger.className = "select-trigger";
+  trigger.setAttribute("aria-haspopup", "listbox");
+  trigger.setAttribute("aria-expanded", "false");
+  trigger.innerHTML = `<span class="select-value"></span><i aria-hidden="true">⌄</i>`;
+  const menu = document.createElement("div");
+  menu.className = "select-menu";
+  menu.setAttribute("role", "listbox");
+  shell.append(trigger, menu);
+  trigger.addEventListener("click", event => {
+    event.preventDefault(); event.stopPropagation();
+    const opening = !shell.classList.contains("open");
+    closeCustomSelect();
+    if (!opening) return;
+    syncCustomSelect(select);
+    shell.classList.add("open");
+    trigger.setAttribute("aria-expanded", "true");
+    openSelectShell = shell;
+  });
+  trigger.addEventListener("keydown", event => {
+    if (!["ArrowDown", "ArrowUp", "Enter", " "].includes(event.key)) return;
+    event.preventDefault();
+    if (!shell.classList.contains("open")) trigger.click();
+    const options = $$('[data-option]:not(:disabled)', menu);
+    const chosen = options.find(button => button.getAttribute("aria-selected") === "true");
+    (chosen || options[0])?.focus();
+  });
+  menu.addEventListener("keydown", event => {
+    const options = $$('[data-option]:not(:disabled)', menu);
+    const current = options.indexOf(document.activeElement);
+    if (event.key === "Escape") { event.preventDefault(); closeCustomSelect(); trigger.focus(); return; }
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      const step = event.key === "ArrowDown" ? 1 : -1;
+      options[(current + step + options.length) % options.length]?.focus();
+    }
+  });
+  syncCustomSelect(select);
+}
+
+function enhanceSelects(root = document) {
+  $$("select", root).forEach(enhanceSelect);
+}
+
+function settleActionDialog(value) {
+  const dialog = $("#actionDialog");
+  if (dialog.open) dialog.close();
+  const resolve = actionResolver;
+  actionResolver = null;
+  resolve?.(value);
+}
+
+function openActionDialog({title, message, confirmLabel = "确认", eyebrow = "CONFIRM ACTION", kind = "default", input = null}) {
+  if (actionResolver) settleActionDialog(null);
+  actionMode = input ? "input" : "confirm";
+  $("#actionTitle").textContent = title;
+  $("#actionMessage").textContent = message;
+  $("#actionEyebrow").textContent = eyebrow;
+  $("#actionIcon").textContent = kind === "danger" ? "!" : (input ? "✎" : "?");
+  $("#actionDialog").dataset.kind = kind;
+  $("#actionConfirm").textContent = confirmLabel;
+  $("#actionConfirm").className = `button ${kind === "danger" ? "danger-solid" : "primary"}`;
+  $("#actionInputWrap").classList.toggle("hidden", !input);
+  $("#actionInputLabel").textContent = input?.label || "名称";
+  $("#actionInput").value = input?.value || "";
+  $("#actionInput").placeholder = input?.placeholder || "";
+  $("#actionInput").classList.remove("invalid");
+  closeCustomSelect();
+  $("#actionDialog").showModal();
+  setTimeout(() => (input ? $("#actionInput") : $("#actionConfirm")).focus(), 0);
+  return new Promise(resolve => { actionResolver = resolve; });
+}
+
+const confirmAction = options => openActionDialog(options).then(Boolean);
+const requestText = options => openActionDialog({...options, input: options.input || {}});
 
 async function api(path, options = {}) {
   const headers = {"Content-Type": "application/json", "X-Access-Token": token(), ...(options.headers || {})};
@@ -55,6 +190,7 @@ async function bootstrap() {
 function renderBootstrap() {
   const roots = $("#rootSelect");
   roots.innerHTML = state.roots.map(root => `<option value="${escapeHtml(root.path)}">${escapeHtml(root.name)}</option>`).join("");
+  syncCustomSelect(roots);
   if (state.roots[0]) $("#pathInput").value = state.roots[0].path;
   $("#rootCount").textContent = `${state.roots.length} 个挂载目录`;
   $("#ruleTypeCount").textContent = `${state.definitions.length} TYPES`;
@@ -138,6 +274,7 @@ function renderRules() {
   $$(".rule-card-actions button", list).forEach(button => button.addEventListener("click", () => mutateRule(Number(button.closest(".rule-card").dataset.index), button.dataset.action)));
   $$('[data-rule][data-key]', list).forEach(input => input.addEventListener("input", onRuleInput));
   $$('select[data-rule][data-key], input[type="checkbox"][data-rule]', list).forEach(input => input.addEventListener("change", onRuleInput));
+  enhanceSelects(list);
 }
 
 function mutateRule(index, action) {
@@ -333,22 +470,29 @@ function renderPresets() {
   const current = select.value;
   select.innerHTML = `<option value="">选择已保存方案</option>` + Object.keys(state.presets).sort().map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join("");
   if (state.presets[current]) select.value = current;
+  syncCustomSelect(select);
 }
 
 async function savePreset() {
   const suggested = $("#presetSelect").value;
-  const name = window.prompt("方案名称", suggested || "我的 NAS 方案");
+  const name = await requestText({
+    title: "保存规则方案",
+    message: "为当前规则流水线输入一个容易识别的名称。",
+    eyebrow: "SAVE PRESET",
+    confirmLabel: "保存方案",
+    input: {label: "方案名称", value: suggested || "我的 NAS 方案", placeholder: "例如：音乐文件整理"},
+  });
   if (!name) return;
   try {
     const data = await api(`/api/presets/${encodeURIComponent(name)}`, {method: "PUT", body: JSON.stringify({rules: state.rules})});
-    state.presets = data.presets; renderPresets(); $("#presetSelect").value = name; toast("方案已保存");
+    state.presets = data.presets; renderPresets(); $("#presetSelect").value = name; syncCustomSelect($("#presetSelect")); toast("方案已保存");
   } catch (error) { toast(error.message, "error"); }
 }
 
 async function deletePreset() {
   const name = $("#presetSelect").value;
   if (!name) { toast("请先选择方案", "warn"); return; }
-  if (!confirm(`删除方案“${name}”？`)) return;
+  if (!await confirmAction({title: "删除规则方案", message: `方案“${name}”删除后无法恢复。`, confirmLabel: "删除方案", eyebrow: "DELETE PRESET", kind: "danger"})) return;
   try { const data = await api(`/api/presets/${encodeURIComponent(name)}`, {method: "DELETE"}); state.presets = data.presets; renderPresets(); toast("方案已删除"); }
   catch (error) { toast(error.message, "error"); }
 }
@@ -356,7 +500,7 @@ async function deletePreset() {
 async function startJob() {
   const items = state.items.filter(item => item.checked !== false && item.new_name && item.new_name !== item.old_name);
   if (!items.length) return;
-  if (!confirm(`即将重命名 ${items.length} 个对象。确认执行？`)) return;
+  if (!await confirmAction({title: "执行批量重命名", message: `即将重命名 ${items.length} 个对象，请确认预览结果和冲突策略。`, confirmLabel: "确认执行", eyebrow: "RUN RENAME JOB"})) return;
   try {
     const data = await api("/api/jobs", {method: "POST", body: JSON.stringify({items, conflict: $("#conflictMode").value})});
     state.job = data.job; renderJob(); pollJob();
@@ -409,7 +553,7 @@ function renderHistory() {
   const list = $("#historyList");
   list.innerHTML = state.history.length ? state.history.map(batch => `<article class="history-card"><header><b>${escapeHtml(batch.time)}</b><small>${batch.items.length} 项</small></header><p>${escapeHtml(batch.items[0]?.source || "空批次")}${batch.items.length > 1 ? ` 等 ${batch.items.length} 项` : ""}</p><button class="button secondary compact" data-undo="${escapeHtml(batch.id)}" ${batch.undone ? "disabled" : ""}>${batch.undone ? "已撤销" : "撤销此批次"}</button></article>`).join("") : `<p class="table-empty">还没有改名历史</p>`;
   $$('[data-undo]', list).forEach(button => button.addEventListener("click", async () => {
-    if (!confirm("撤销此批次并恢复原名称？")) return;
+    if (!await confirmAction({title: "撤销重命名批次", message: "将尝试把此批次中的文件恢复为原名称。", confirmLabel: "确认撤销", eyebrow: "UNDO BATCH", kind: "danger"})) return;
     setBusy(button, true);
     try { const data = await api(`/api/history/${button.dataset.undo}/undo`, {method: "POST", body: "{}"}); toast(`已恢复 ${data.reverted} 个对象`); await loadHistory(); if (state.items.length) await scan(); }
     catch (error) { toast(error.message, "error"); } finally { setBusy(button, false); }
@@ -417,6 +561,7 @@ function renderHistory() {
 }
 
 function bindEvents() {
+  $("#themeToggle").addEventListener("click", () => applyTheme(document.documentElement.dataset.theme === "light" ? "dark" : "light"));
   $("#rootSelect").addEventListener("change", event => $("#pathInput").value = event.target.value);
   $("#scanButton").addEventListener("click", scan);
   $("#previewButton").addEventListener("click", () => refreshPreview(false));
@@ -451,11 +596,33 @@ function bindEvents() {
   $("#openHistory").addEventListener("click", async () => { $("#historyDialog").showModal(); await loadHistory(); });
   $("#openToken").addEventListener("click", () => { $("#tokenInput").value = token(); $("#tokenDialog").showModal(); });
   $("#saveToken").addEventListener("click", () => { localStorage.setItem("renamedock-token", $("#tokenInput").value); $("#tokenDialog").close(); bootstrap(); });
+  $("#actionCancel").addEventListener("click", () => settleActionDialog(null));
+  $("#actionClose").addEventListener("click", () => settleActionDialog(null));
+  $("#actionConfirm").addEventListener("click", () => {
+    if (actionMode === "input") {
+      const value = $("#actionInput").value.trim();
+      if (!value) { $("#actionInput").classList.add("invalid"); $("#actionInput").focus(); return; }
+      settleActionDialog(value);
+      return;
+    }
+    settleActionDialog(true);
+  });
+  $("#actionInput").addEventListener("input", () => $("#actionInput").classList.remove("invalid"));
+  $("#actionInput").addEventListener("keydown", event => { if (event.key === "Enter") { event.preventDefault(); $("#actionConfirm").click(); } });
+  $("#actionDialog").addEventListener("cancel", event => { event.preventDefault(); settleActionDialog(null); });
   $$('[data-close]').forEach(button => button.addEventListener("click", () => $("#" + button.dataset.close).close()));
+  $$("dialog").forEach(dialog => dialog.addEventListener("click", event => {
+    if (event.target !== dialog) return;
+    if (dialog.id === "actionDialog") settleActionDialog(null); else dialog.close();
+  }));
   $$(".nav-item").forEach(button => button.addEventListener("click", () => $("#" + button.dataset.jump).scrollIntoView({behavior:"smooth"})));
+  document.addEventListener("click", closeCustomSelect);
+  document.addEventListener("change", event => { if (event.target.matches?.("select.native-select")) syncCustomSelect(event.target); });
+  document.addEventListener("keydown", event => { if (event.key === "Escape" && openSelectShell) closeCustomSelect(); });
+  window.addEventListener("resize", closeCustomSelect);
   setInterval(() => $("#clock").textContent = new Date().toLocaleTimeString("zh-CN", {hour:"2-digit",minute:"2-digit"}), 1000);
   if (document.body.dataset.tokenRequired === "true" && !token()) $("#tokenDialog").showModal();
 }
 
-document.addEventListener("DOMContentLoaded", () => { bindEvents(); bootstrap(); renderRules(); renderPreview(); updateMetrics(); });
+document.addEventListener("DOMContentLoaded", () => { initTheme(); enhanceSelects(); bindEvents(); bootstrap(); renderRules(); renderPreview(); updateMetrics(); });
 
