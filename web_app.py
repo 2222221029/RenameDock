@@ -56,7 +56,9 @@ def security_headers(response):
         "default-src 'self'; script-src 'self'; style-src 'self'; "
         "img-src 'self' data:; connect-src 'self'; frame-ancestors 'self'"
     )
-    response.headers["Cache-Control"] = "no-store" if request.path.startswith("/api/") else "no-cache"
+    response.headers["Cache-Control"] = "no-store, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
     return response
 
 
@@ -186,4 +188,3 @@ def api_delete_preset(name: str):
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", "8080")), debug=False)
-
