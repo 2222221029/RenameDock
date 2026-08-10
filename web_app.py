@@ -26,7 +26,7 @@ from nas_renamer_service import (
 BASE_DIR = Path(__file__).resolve().parent
 CONFIG_DIR = Path(os.environ.get("CONFIG_DIR", BASE_DIR / ".renamedock")).resolve()
 ACCESS_TOKEN = os.environ.get("RENAMEDOCK_TOKEN") or os.environ.get("NAS_RENAMER_TOKEN", "")
-APP_VERSION = "1.1.1"
+APP_VERSION = "1.1.2"
 
 
 def read_asset_text(path: Path) -> str:
