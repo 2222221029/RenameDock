@@ -26,7 +26,18 @@ from nas_renamer_service import (
 BASE_DIR = Path(__file__).resolve().parent
 CONFIG_DIR = Path(os.environ.get("CONFIG_DIR", BASE_DIR / ".renamedock")).resolve()
 ACCESS_TOKEN = os.environ.get("RENAMEDOCK_TOKEN") or os.environ.get("NAS_RENAMER_TOKEN", "")
-APP_VERSION = "1.1.0"
+APP_VERSION = "1.1.1"
+
+
+def read_asset_text(path: Path) -> str:
+    """Read UI assets produced on Windows or Linux without crashing the homepage."""
+    raw = path.read_bytes()
+    for encoding in ("utf-8-sig", "gb18030"):
+        try:
+            return raw.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    return raw.decode("utf-8", errors="replace")
 
 app = Flask(
     __name__,
@@ -101,8 +112,8 @@ def index():
         token_required=bool(ACCESS_TOKEN),
         app_version=APP_VERSION,
         csp_nonce=g.csp_nonce,
-        app_style=(BASE_DIR / "static" / "app.css").read_text(encoding="utf-8"),
-        app_script=(BASE_DIR / "static" / "app.js").read_text(encoding="utf-8"),
+        app_style=read_asset_text(BASE_DIR / "static" / "app.css"),
+        app_script=read_asset_text(BASE_DIR / "static" / "app.js"),
     )
 
 
