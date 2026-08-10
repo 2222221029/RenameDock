@@ -120,6 +120,8 @@ h2 { font-size: 25px; margin: 0; letter-spacing: -.025em; }
 
 .source-card { padding: 21px; }
 .path-bar { display: grid; grid-template-columns: 190px minmax(200px, 1fr) auto auto; gap: 9px; }
+.path-bar > select[data-native-select] { width: 100%; appearance: auto; color-scheme: dark; cursor: pointer; }
+[data-theme="light"] .path-bar > select[data-native-select] { color-scheme: light; }
 #browseButton { position: relative; z-index: 3; pointer-events: auto; touch-action: manipulation; }
 input, select, textarea { color: var(--ink); background: var(--input-bg); border: 1px solid var(--line); outline: 0; border-radius: 11px; min-height: 43px; padding: 0 13px; transition: border-color .2s, box-shadow .2s, background .22s; }
 textarea { padding: 11px 13px; resize: vertical; }
