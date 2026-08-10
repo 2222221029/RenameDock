@@ -123,6 +123,8 @@ h2 { font-size: 25px; margin: 0; letter-spacing: -.025em; }
 .path-bar > select[data-native-select] { width: 100%; appearance: auto; color-scheme: dark; cursor: pointer; }
 [data-theme="light"] .path-bar > select[data-native-select] { color-scheme: light; }
 #browseButton { position: relative; z-index: 3; pointer-events: auto; touch-action: manipulation; }
+.bootstrap-error { margin-top: 11px; min-height: 42px; padding: 8px 10px 8px 13px; border: 1px solid color-mix(in srgb, var(--danger) 45%, var(--line)); border-radius: 11px; background: color-mix(in srgb, var(--danger) 8%, transparent); color: var(--danger); display: flex; align-items: center; justify-content: space-between; gap: 14px; font-size: 11px; }
+.bootstrap-error button { min-height: 28px; padding: 0 10px; border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--line)); border-radius: 8px; background: var(--soft-fill); color: var(--ink); cursor: pointer; white-space: nowrap; }
 input, select, textarea { color: var(--ink); background: var(--input-bg); border: 1px solid var(--line); outline: 0; border-radius: 11px; min-height: 43px; padding: 0 13px; transition: border-color .2s, box-shadow .2s, background .22s; }
 textarea { padding: 11px 13px; resize: vertical; }
 input:focus, select:focus, textarea:focus { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 9%, transparent); }

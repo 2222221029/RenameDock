@@ -26,7 +26,12 @@ BASE_DIR = Path(__file__).resolve().parent
 CONFIG_DIR = Path(os.environ.get("CONFIG_DIR", BASE_DIR / ".renamedock")).resolve()
 ACCESS_TOKEN = os.environ.get("RENAMEDOCK_TOKEN") or os.environ.get("NAS_RENAMER_TOKEN", "")
 
-app = Flask(__name__, static_folder="static", template_folder="templates")
+app = Flask(
+    __name__,
+    static_folder="static",
+    static_url_path="/assets/20260810-6",
+    template_folder="templates",
+)
 app.config.update(JSON_AS_ASCII=False, MAX_CONTENT_LENGTH=8 * 1024 * 1024)
 
 guard = PathGuard()
@@ -39,7 +44,8 @@ manager = RenameManager(guard, history)
 @app.before_request
 def require_token():
     token = ACCESS_TOKEN
-    if not token or request.path in {"/", "/api/health"} or request.path.startswith("/static/"):
+    static_prefix = f"{app.static_url_path}/"
+    if not token or request.path in {"/", "/api/health"} or request.path.startswith(static_prefix):
         return None
     supplied = request.headers.get("X-Access-Token", "")
     if not hmac.compare_digest(token, supplied):
