@@ -40,8 +40,8 @@
           <span><i></i><b id="rootCount">0 个挂载目录</b></span>
           <small id="clock">--:--</small>
         </div>
-        <button class="theme-toggle" id="themeToggle" type="button" aria-label="切换浅色模式" title="切换浅色模式">
-          <span id="themeIcon" aria-hidden="true">☀</span>
+        <button class="theme-toggle" data-theme-toggle type="button" aria-label="切换浅色模式" title="切换浅色模式">
+          <span data-theme-icon aria-hidden="true">☀</span>
         </button>
       </div>
     </header>
@@ -131,6 +131,7 @@
           </div>
           <div class="preview-actions">
             <span id="previewHint">请先扫描文件</span>
+            <button class="theme-inline" data-theme-toggle type="button" aria-label="切换浅色模式" title="切换浅色模式"><span data-theme-icon aria-hidden="true">☀</span><b data-theme-label>浅色模式</b></button>
             <button class="button secondary" id="previewButton">刷新预览</button>
           </div>
         </div>

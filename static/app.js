@@ -21,9 +21,12 @@ function applyTheme(theme) {
   document.documentElement.dataset.theme = selected;
   localStorage.setItem("renamedock-theme", selected);
   const light = selected === "light";
-  $("#themeIcon").textContent = light ? "☾" : "☀";
-  $("#themeToggle").title = light ? "切换深色模式" : "切换浅色模式";
-  $("#themeToggle").setAttribute("aria-label", light ? "切换深色模式" : "切换浅色模式");
+  $$("[data-theme-toggle]").forEach(button => {
+    button.querySelector("[data-theme-icon]").textContent = light ? "☾" : "☀";
+    button.querySelector("[data-theme-label]")?.replaceChildren(light ? "深色模式" : "浅色模式");
+    button.title = light ? "切换深色模式" : "切换浅色模式";
+    button.setAttribute("aria-label", light ? "切换深色模式" : "切换浅色模式");
+  });
 }
 
 function initTheme() {
@@ -407,10 +410,15 @@ function previewRow(item, index) {
     <td><label class="check"><input type="checkbox" data-check="${index}" ${item.checked !== false ? "checked" : ""}><span></span></label></td>
     <td><span class="file-name" title="${escapeHtml(item.old_name)}">${escapeHtml(item.old_name)}</span></td>
     <td class="arrow-cell">→</td>
-    <td><input class="new-name" data-name="${index}" value="${escapeHtml(item.new_name || "")}" ${item.error ? "disabled" : ""}></td>
+    <td><input class="new-name" data-name="${index}" value="${escapeHtml(item.new_name || "")}" title="${escapeHtml(item.new_name || "")}" style="width:${nameFieldWidth(item.new_name || "")}px" ${item.error ? "disabled" : ""}></td>
     <td class="path-cell" title="${escapeHtml(item.path)}">${escapeHtml(item.path.substring(0, item.path.length - item.old_name.length))}</td>
     <td><span class="status-pill ${statusClass}" title="${escapeHtml(status)}">${escapeHtml(status)}</span></td>
   </tr>`;
+}
+
+function nameFieldWidth(value) {
+  const units = [...String(value)].reduce((total, character) => total + (character.codePointAt(0) > 255 ? 2 : 1), 0);
+  return Math.max(560, Math.min(1600, Math.round(units * 7.2 + 72)));
 }
 
 function renderPreview() {
@@ -561,7 +569,7 @@ function renderHistory() {
 }
 
 function bindEvents() {
-  $("#themeToggle").addEventListener("click", () => applyTheme(document.documentElement.dataset.theme === "light" ? "dark" : "light"));
+  $$("[data-theme-toggle]").forEach(button => button.addEventListener("click", () => applyTheme(document.documentElement.dataset.theme === "light" ? "dark" : "light")));
   $("#rootSelect").addEventListener("change", event => $("#pathInput").value = event.target.value);
   $("#scanButton").addEventListener("click", scan);
   $("#previewButton").addEventListener("click", () => refreshPreview(false));
