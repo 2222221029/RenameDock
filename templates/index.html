@@ -4,8 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark light">
-  <title>RenameDock · NAS File Renamer</title>
-  <link rel="stylesheet" href="/assets/20260810-6/app.css">
+  <meta name="application-version" content="{{ app_version }}">
+  <title>RenameDock {{ app_version }} · NAS File Renamer</title>
+  <style nonce="{{ csp_nonce }}">{{ app_style | safe }}</style>
 </head>
 <body data-token-required="{{ 'true' if token_required else 'false' }}">
   <div class="ambient ambient-a"></div><div class="ambient ambient-b"></div>
@@ -206,6 +207,6 @@
     </div>
   </dialog>
 
-  <script src="/assets/20260810-6/app.js" defer></script>
+  <script nonce="{{ csp_nonce }}">{{ app_script | safe }}</script>
 </body>
 </html>

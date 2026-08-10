@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import hmac
 import os
+import secrets
 from pathlib import Path
 from typing import Any
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, g, jsonify, render_template, request
 
 from nas_renamer_service import (
     HistoryStore,
@@ -25,6 +26,7 @@ from nas_renamer_service import (
 BASE_DIR = Path(__file__).resolve().parent
 CONFIG_DIR = Path(os.environ.get("CONFIG_DIR", BASE_DIR / ".renamedock")).resolve()
 ACCESS_TOKEN = os.environ.get("RENAMEDOCK_TOKEN") or os.environ.get("NAS_RENAMER_TOKEN", "")
+APP_VERSION = "1.1.0"
 
 app = Flask(
     __name__,
@@ -55,13 +57,16 @@ def require_token():
 
 @app.after_request
 def security_headers(response):
+    nonce = getattr(g, "csp_nonce", "")
+    inline_policy = f" 'nonce-{nonce}'" if nonce else ""
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "SAMEORIGIN"
     response.headers["Referrer-Policy"] = "same-origin"
     response.headers["Content-Security-Policy"] = (
-        "default-src 'self'; script-src 'self'; style-src 'self'; "
+        f"default-src 'self'; script-src 'self'{inline_policy}; style-src 'self'{inline_policy}; "
         "img-src 'self' data:; connect-src 'self'; frame-ancestors 'self'"
     )
+    response.headers["X-RenameDock-Version"] = APP_VERSION
     response.headers["Cache-Control"] = "no-store, max-age=0"
     response.headers["Pragma"] = "no-cache"
     response.headers["Expires"] = "0"
@@ -90,12 +95,20 @@ def payload() -> dict[str, Any]:
 
 @app.get("/")
 def index():
-    return render_template("index.html", token_required=bool(ACCESS_TOKEN))
+    g.csp_nonce = secrets.token_urlsafe(18)
+    return render_template(
+        "index.html",
+        token_required=bool(ACCESS_TOKEN),
+        app_version=APP_VERSION,
+        csp_nonce=g.csp_nonce,
+        app_style=(BASE_DIR / "static" / "app.css").read_text(encoding="utf-8"),
+        app_script=(BASE_DIR / "static" / "app.js").read_text(encoding="utf-8"),
+    )
 
 
 @app.get("/api/health")
 def api_health():
-    return jsonify({"ok": True, "service": "RenameDock", "version": "1.0.0"})
+    return jsonify({"ok": True, "service": "RenameDock", "version": APP_VERSION})
 
 
 @app.get("/api/bootstrap")
